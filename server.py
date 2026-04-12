@@ -1,9 +1,8 @@
 import os
 import sys
-import asyncio
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, List
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,21 +13,14 @@ submodule_path = os.path.join(os.path.dirname(__file__), "mempalace")
 if submodule_path not in sys.path:
     sys.path.insert(0, submodule_path)
 
-from mcp.server import Server
-from mcp.server.sse import SseServerTransport
-from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
+from mcp.server import Server # noqa: E402
+from mcp.server.sse import SseServerTransport # noqa: E402
+from mcp.types import Tool, TextContent # noqa: E402
 
 # Import core MemPalace logic (from vendored package)
-from mempalace.mcp_server import (
-    tool_status, tool_list_wings, tool_list_rooms, tool_get_taxonomy,
-    tool_search, tool_check_duplicate, tool_get_aaak_spec,
-    tool_traverse_graph, tool_find_tunnels, tool_graph_stats,
-    tool_add_drawer, tool_delete_drawer, tool_get_drawer,
-    tool_list_drawers, tool_update_drawer,
-    tool_kg_query, tool_kg_add, tool_kg_invalidate,
-    tool_kg_timeline, tool_kg_stats, tool_diary_write
+from mempalace.mcp_server import ( # noqa: E402
+    tool_status, tool_list_wings, tool_search, tool_kg_query, tool_kg_add, tool_kg_timeline
 )
-from mempalace.version import __version__
 
 # Configuration
 PORT_API = int(os.getenv("PORT_API", "8000"))
@@ -122,8 +114,7 @@ async def messages_endpoint(request: Request):
 async def get_graph():
     """Retrieve the full Knowledge Graph for the dashboard."""
     try:
-        # We use tool_kg_stats and tool_kg_timeline to build a full graph view
-        stats = tool_kg_stats()
+        # We use tool_kg_timeline to build a full graph view
         timeline = tool_kg_timeline()
         
         # Transform into Cytoscape format: {nodes: [], edges: []}
