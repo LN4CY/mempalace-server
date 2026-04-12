@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemPalace Explorer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0a0e14;
+            --panel-bg: rgba(16, 22, 32, 0.85);
+            --accent-primary: #4dc9f6;
+            --accent-secondary: #7dd8f8;
+            --text-main: #e6edf3;
+            --text-dim: #8b949e;
+            --border-color: #30363d;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #app {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        #cy {
+            flex-grow: 1;
+            height: 100%;
+            background: radial-gradient(circle at center, #161b22 0%, #0a0e14 100%);
+        }
+
+        #sidebar {
+            width: 380px;
+            background-color: var(--panel-bg);
+            border-left: 1px solid var(--border-color);
+            backdrop-filter: blur(12px);
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+        }
+
+        .header {
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.5px;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: var(--text-dim);
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            border-radius: 12px;
+        }
+
+        .stat-card span {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .stat-card strong {
+            font-size: 20px;
+            color: var(--accent-primary);
+        }
+
+        .node-info {
+            flex-grow: 1;
+        }
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid var(--accent-primary);
+            display: none;
+        }
+
+        .info-card.active {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .info-card h3 {
+            margin-top: 0;
+            color: var(--accent-primary);
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            background: rgba(77, 201, 246, 0.1);
+            color: var(--accent-primary);
+            border: 1px solid rgba(77, 201, 246, 0.2);
+            margin-bottom: 12px;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-dim);
+            margin-top: 60px;
+        }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        button {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            border-color: var(--accent-primary);
+            background: rgba(77, 201, 246, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="controls">
+            <button onclick="refreshData()">↻ Refresh Graph</button>
+            <button onclick="cy.fit()">⛶ Fit View</button>
+        </div>
+        <div id="cy"></div>
+        <div id="sidebar">
+            <div class="header">
+                <h1>MemPalace Explorer</h1>
+                <p>Knowledge Graph Visualization v3.1</p>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span>Entities</span>
+                    <strong id="stat-nodes">0</strong>
+                </div>
+                <div class="stat-card">
+                    <span>Relations</span>
+                    <strong id="stat-edges">0</strong>
+                </div>
+            </div>
+
+            <div class="node-info">
+                <div id="empty-state" class="empty-state">
+                    <p>Select a node in the graph to view details.</p>
+                </div>
+                <div id="info-card" class="info-card">
+                    <span class="pill" id="node-type">ENTITY</span>
+                    <h3 id="node-label">Entity Name</h3>
+                    <div id="node-details">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let cy;
+
+        async function initGraph() {
+            const data = await fetchGraphData();
+            
+            cy = cytoscape({
+                container: document.getElementById('cy'),
+                elements: data,
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-color': '#1f2937',
+                            'label': 'data(label)',
+                            'color': '#e6edf3',
+                            'font-size': '12px',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'width': '40px',
+                            'height': '40px',
+                            'border-width': 2,
+                            'border-color': '#4dc9f6',
+                            'text-margin-y': '24px'
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 2,
+                            'line-color': '#30363d',
+                            'target-arrow-color': '#30363d',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'label': 'data(label)',
+                            'font-size': '10px',
+                            'color': '#8b949e',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': '-10px'
+                        }
+                    },
+                    {
+                        selector: 'node:selected',
+                        style: {
+                            'background-color': '#4dc9f6',
+                            'border-color': '#fff',
+                            'border-width': 3
+                        }
+                    }
+                ],
+                layout: {
+                    name: 'cose',
+                    animate: true,
+                    nodeOverlap: 20,
+                    componentSpacing: 100
+                }
+            });
+
+            cy.on('select', 'node', function(evt){
+                showNodeInfo(evt.target.data());
+            });
+
+            cy.on('unselect', 'node', function(){
+                hideNodeInfo();
+            });
+
+            updateStats(data);
+        }
+
+        async function fetchGraphData() {
+            try {
+                const res = await fetch('/api/graph');
+                return await res.json();
+            } catch (e) {
+                console.error("Failed to fetch graph data", e);
+                return { nodes: [], edges: [] };
+            }
+        }
+
+        function updateStats(data) {
+            document.getElementById('stat-nodes').innerText = data.nodes.length;
+            document.getElementById('stat-edges').innerText = data.edges.length;
+        }
+
+        function showNodeInfo(data) {
+            document.getElementById('empty-state').style.display = 'none';
+            document.getElementById('info-card').classList.add('active');
+            document.getElementById('node-label').innerText = data.label;
+            document.getElementById('node-type').innerText = (data.type || "ENTITY").toUpperCase();
+        }
+
+        function hideNodeInfo() {
+            document.getElementById('empty-state').style.display = 'block';
+            document.getElementById('info-card').classList.remove('active');
+        }
+
+        async function refreshData() {
+            const data = await fetchGraphData();
+            cy.elements().remove();
+            cy.add(data);
+            cy.layout({ name: 'cose', animate: true }).run();
+            updateStats(data);
+        }
+
+        window.onload = initGraph;
+    </script>
+</body>
+</html>

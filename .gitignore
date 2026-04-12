@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environments
+venv/
+ENV/
+env/
+.env
+
+# Project specific
+data/
+*.db
+*.log
+mempalace-viz.egg-info/

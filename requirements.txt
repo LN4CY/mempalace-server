@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+mcp
+chromadb
+pyyaml
+python-multipart
+# For graph data processing
+networkx
