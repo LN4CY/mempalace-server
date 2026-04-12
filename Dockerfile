@@ -7,12 +7,17 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 # Fix for ChromaDB/hnswlib build issues on ARM during cross-compilation
 ENV HNSWLIB_NO_NATIVE=1
+ENV PIP_DEFAULT_TIMEOUT=100
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
     cmake \
+    pkg-config \
+    libsqlite3-dev \
+    libssl-dev \
+    libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
