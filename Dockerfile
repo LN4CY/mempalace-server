@@ -2,14 +2,23 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Set environment variables for better container behavior and ARM compatibility
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+# Fix for ChromaDB/hnswlib build issues on ARM during cross-compilation
+ENV HNSWLIB_NO_NATIVE=1
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    python3-dev \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY server.py .
