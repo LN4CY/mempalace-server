@@ -41,5 +41,9 @@ ENV PYTHONPATH="/app/mempalace"
 EXPOSE 8000
 EXPOSE 8080
 
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/ || exit 1
+
 # Run the server
 CMD ["python", "server.py"]
