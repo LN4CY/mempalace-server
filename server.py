@@ -2,6 +2,8 @@ import os
 import sys
 import json
 import logging
+import asyncio
+import uvicorn
 from typing import Any, List
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -49,13 +51,13 @@ async def list_tools() -> List[Tool]:
             },
             "required": ["entity"]
         }),
-        # ... (other tools will be registered similarly)
+        # Note: Additional tools are available via fallback/bridge
     ]
 
 @mcp_server.call_tool()
 async def call_tool(name: str, arguments: Any) -> List[TextContent]:
     """Execute a MemPalace tool."""
-    # Mapping table for simplicity in this POC
+    # Mapping table for simplicity 
     tool_map = {
         "mempalace_status": tool_status,
         "mempalace_list_wings": tool_list_wings,
@@ -75,20 +77,26 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         logger.error(f"Tool execution failed: {e}")
         return [TextContent(type="text", text=f"Execution error: {str(e)}")]
 
-# 2. FastAPI Setup
-app = FastAPI(title="MemPalace Viz Service")
+# ---------------------------------------------------------
+# 2. FastAPI Setup - MCP API (Port 8000)
+# ---------------------------------------------------------
+mcp_app = FastAPI(title="MemPalace MCP API")
 sse_transport = SseServerTransport("/sse")
 
-app.add_middleware(
+mcp_app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.get("/sse")
+@mcp_app.get("/")
+async def root():
+    return {"status": "ok", "service": "mcp-api"}
+
+@mcp_app.get("/sse")
 async def sse_endpoint(request: Request):
-    """MCP SSE endpoint with health-check support for testing."""
+    """MCP SSE endpoint for agent communication."""
     if request.headers.get("X-Health-Check"):
         return JSONResponse({"status": "ready", "mcp": "sse"})
 
@@ -101,62 +109,89 @@ async def sse_endpoint(request: Request):
             mcp_server.create_initialization_options(),
         )
 
-
-@app.post("/messages")
+@mcp_app.post("/messages")
 async def messages_endpoint(request: Request):
     """MCP POST endpoint for SSE messages."""
     return await sse_transport.handle_post_message(
         request.scope, request.receive, request._send
     )
 
-# 3. Visualization API
-@app.get("/api/graph")
+# ---------------------------------------------------------
+# 3. FastAPI Setup - Visualization Dashboard (Port 8080)
+# ---------------------------------------------------------
+viz_app = FastAPI(title="MemPalace Visualization Dashboard")
+
+viz_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@viz_app.get("/api/graph")
 async def get_graph():
     """Retrieve the full Knowledge Graph for the dashboard."""
     try:
-        # We use tool_kg_timeline to build a full graph view
         timeline = tool_kg_timeline()
-        
-        # Transform into Cytoscape format: {nodes: [], edges: []}
         cy_data = {"nodes": [], "edges": []}
         entities = set()
         
-        # Extract entities and relations from timeline/stats
-        # (Simplified logic for POC)
         for fact in timeline.get("timeline", []):
             subj = fact.get("subject")
             obj = fact.get("object")
             pred = fact.get("predicate")
             
-            if subj not in entities:
+            if subj and subj not in entities:
                 cy_data["nodes"].append({"data": {"id": subj, "label": subj, "type": "entity"}})
                 entities.add(subj)
-            if obj not in entities:
+            if obj and obj not in entities:
                 cy_data["nodes"].append({"data": {"id": obj, "label": obj, "type": "entity"}})
                 entities.add(obj)
             
-            cy_data["edges"].append({
-                "data": {
-                    "source": subj,
-                    "target": obj,
-                    "label": pred
-                }
-            })
+            if subj and obj:
+                cy_data["edges"].append({
+                    "data": {
+                        "source": subj,
+                        "target": obj,
+                        "label": pred
+                    }
+                })
             
         return cy_data
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# 4. Serve Dashboard
+# Serve Dashboard static files
 dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard")
 if os.path.exists(dashboard_path):
-    app.mount("/dashboard", StaticFiles(directory=dashboard_path, html=True), name="dashboard")
+    viz_app.mount("/", StaticFiles(directory=dashboard_path, html=True), name="dashboard")
 
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    return "<h1>MemPalace Viz Service</h1><p>Visit <a href='/dashboard'>/dashboard</a> for the visualization.</p>"
+@viz_app.get("/health")
+async def health():
+    return {"status": "ok", "service": "dashboard"}
+
+# ---------------------------------------------------------
+# 4. Multi-Server Startup
+# ---------------------------------------------------------
+async def start_servers():
+    """Run both API and Visualization servers in parallel."""
+    config_api = uvicorn.Config(mcp_app, host="0.0.0.0", port=PORT_API, log_level="info")
+    config_viz = uvicorn.Config(viz_app, host="0.0.0.0", port=PORT_DASHBOARD, log_level="info")
+    
+    server_api = uvicorn.Server(config_api)
+    server_viz = uvicorn.Server(config_viz)
+    
+    logger.info(f"Starting MCP API on port {PORT_API}")
+    logger.info(f"Starting Visualization Dashboard on port {PORT_DASHBOARD}")
+    
+    await asyncio.gather(
+        server_api.serve(),
+        server_viz.serve()
+    )
 
 if __name__ == "__main__":
-    import uvicorn
-    logger.info(f"Starting MemPalace Viz Service on port {PORT_API}")
-    uvicorn.run(app, host="0.0.0.0", port=PORT_API)
+    try:
+        asyncio.run(start_servers())
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
+
