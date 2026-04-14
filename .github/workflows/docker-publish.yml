@@ -70,5 +70,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' || github.repository == github.event.pull_request.head.repo.full_name }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Multi-arch support for Raspberry Pi
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          # Multi-arch support for Raspberry Pi (removed arm/v7 for speed)
+          platforms: linux/amd64,linux/arm64
+          # Enable GitHub Actions caching for Docker layers
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
