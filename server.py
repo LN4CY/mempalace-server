@@ -108,7 +108,10 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
 # 2. FastAPI Setup - MCP API (Port 8000)
 # ---------------------------------------------------------
 mcp_app = FastAPI(title="MemPalace MCP API", redirect_slashes=False)
-sse_transport = SseServerTransport("/messages")
+# Starlette 1.0 mount() only matches paths with a trailing slash component,
+# so the transport endpoint must also use the trailing slash so clients POST
+# to /messages/?session_id=... which routes correctly to the mounted ASGI app.
+sse_transport = SseServerTransport("/messages/")
 
 mcp_app.add_middleware(
     CORSMiddleware,
@@ -139,7 +142,7 @@ async def sse_endpoint(request: Request):
 # Mount as a raw ASGI app so handle_post_message sends its own 202 without
 # FastAPI adding a second response on return (which causes "response already
 # completed" errors).
-mcp_app.mount("/messages", app=sse_transport.handle_post_message)
+mcp_app.mount("/messages/", app=sse_transport.handle_post_message)
 
 # ---------------------------------------------------------
 # 3. FastAPI Setup - Visualization Dashboard (Port 8080)
