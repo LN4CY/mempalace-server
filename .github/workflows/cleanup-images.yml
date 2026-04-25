@@ -15,7 +15,7 @@ jobs:
       - name: Delete old commit SHA images
         uses: snok/container-retention-policy@v3.0.1
         with:
-          image-names: mempalace-viz
+          image-names: mempalace-server
           cut-off: 30d
           account: user
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -24,7 +24,7 @@ jobs:
       - name: Delete old PR images
         uses: snok/container-retention-policy@v3.0.1
         with:
-          image-names: mempalace-viz
+          image-names: mempalace-server
           cut-off: 14d
           account: user
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -34,7 +34,7 @@ jobs:
       - name: Delete old chore branch images
         uses: snok/container-retention-policy@v3.0.1
         with:
-          image-names: mempalace-viz
+          image-names: mempalace-server
           cut-off: 14d
           account: user
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -44,7 +44,7 @@ jobs:
       - name: Delete old fix branch images
         uses: snok/container-retention-policy@v3.0.1
         with:
-          image-names: mempalace-viz
+          image-names: mempalace-server
           cut-off: 14d
           account: user
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -54,7 +54,7 @@ jobs:
       - name: Delete old feat branch images
         uses: snok/container-retention-policy@v3.0.1
         with:
-          image-names: mempalace-viz
+          image-names: mempalace-server
           cut-off: 14d
           account: user
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -64,7 +64,7 @@ jobs:
       - name: Delete old master branch images
         uses: snok/container-retention-policy@v3.0.1
         with:
-          image-names: mempalace-viz
+          image-names: mempalace-server
           cut-off: 90d
           account: user
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -76,7 +76,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAGGED=$(gh api "user/packages/container/mempalace-viz/versions" \
+          TAGGED=$(gh api "user/packages/container/mempalace-server/versions" \
             --paginate \
             --jq '.[] | select(.metadata.container.tags | length > 0) | .name' \
             2>/dev/null || echo "")
@@ -87,7 +87,7 @@ jobs:
             children=$(curl -sf \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json" \
-              "https://ghcr.io/v2/${{ github.repository_owner }}/mempalace-viz/manifests/$digest" \
+              "https://ghcr.io/v2/${{ github.repository_owner }}/mempalace-server/manifests/$digest" \
               | python3 -c "import sys,json; d=json.load(sys.stdin); [print(m['digest']) for m in d.get('manifests',[])]" \
               2>/dev/null || true)
             [ -n "$children" ] && SKIP+="${children}"$'\n'
@@ -99,7 +99,7 @@ jobs:
       - name: Delete old untagged images
         uses: snok/container-retention-policy@v3.0.1
         with:
-          image-names: mempalace-viz
+          image-names: mempalace-server
           cut-off: 30d
           account: user
           token: ${{ secrets.GITHUB_TOKEN }}

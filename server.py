@@ -30,10 +30,10 @@ PORT_DASHBOARD = int(os.getenv("PORT_DASHBOARD", "8080"))
 
 # Logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("mempalace-viz")
+logger = logging.getLogger("mempalace-server")
 
 # 1. Initialize MCP Server
-mcp_server = Server("mempalace-viz")
+mcp_server = Server("mempalace-server")
 
 # Register Tools
 @mcp_server.list_tools()
