@@ -29,8 +29,14 @@ PORT_API = int(os.getenv("PORT_API", "8000"))
 PORT_DASHBOARD = int(os.getenv("PORT_DASHBOARD", "8080"))
 
 # Logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 logger = logging.getLogger("mempalace-server")
+
+# Silence noisy uvicorn access logs
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 # 1. Initialize MCP Server
 mcp_server = Server("mempalace-server")
@@ -95,10 +101,13 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
     }
     
     if name not in tool_map:
+        logger.warning(f"⚠️ Tool rejected: '{name}' not supported by bridge.")
         return [TextContent(type="text", text=f"Error: Tool '{name}' not supported by bridge.")]
     
     try:
+        logger.info(f"🔨 Executing tool: {name} | args: {json.dumps(arguments)}")
         result = tool_map[name](arguments)
+        logger.info(f"✅ Tool {name} completed successfully")
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
     except Exception as e:
         logger.error(f"Tool execution failed: {e}")
