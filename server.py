@@ -194,8 +194,8 @@ async def health():
 # ---------------------------------------------------------
 async def start_servers():
     """Run both API and Visualization servers in parallel."""
-    config_api = uvicorn.Config(mcp_app, host="0.0.0.0", port=PORT_API, log_level="info")
-    config_viz = uvicorn.Config(viz_app, host="0.0.0.0", port=PORT_DASHBOARD, log_level="info")
+    config_api = uvicorn.Config(mcp_app, host="0.0.0.0", port=PORT_API, log_level="info", access_log=False)
+    config_viz = uvicorn.Config(viz_app, host="0.0.0.0", port=PORT_DASHBOARD, log_level="info", access_log=False)
     
     server_api = uvicorn.Server(config_api)
     server_viz = uvicorn.Server(config_viz)
