@@ -109,12 +109,10 @@ async def sse_endpoint(request: Request):
             mcp_server.create_initialization_options(),
         )
 
-@mcp_app.post("/messages")
-async def messages_endpoint(request: Request):
-    """MCP POST endpoint for SSE messages."""
-    return await sse_transport.handle_post_message(
-        request.scope, request.receive, request._send
-    )
+# Mount as a raw ASGI app so handle_post_message sends its own 202 without
+# FastAPI adding a second response on return (which causes "response already
+# completed" errors).
+mcp_app.mount("/messages", app=sse_transport.handle_post_message)
 
 # ---------------------------------------------------------
 # 3. FastAPI Setup - Visualization Dashboard (Port 8080)
