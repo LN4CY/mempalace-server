@@ -41,17 +41,44 @@ async def list_tools() -> List[Tool]:
     """List available MemPalace tools."""
     return [
         Tool(name="mempalace_status", description="Palace overview + AAAK spec", inputSchema={"type": "object"}),
-        Tool(name="mempalace_list_wings", description="Wings with counts", inputSchema={"type": "object"}),
-        Tool(name="mempalace_kg_query", description="Query knowledge graph", inputSchema={
+        Tool(name="mempalace_list_wings", description="List memory wings with document counts", inputSchema={"type": "object"}),
+        Tool(name="mempalace_search", description="Semantic search across all stored memories", inputSchema={
             "type": "object",
             "properties": {
-                "entity": {"type": "string"},
-                "as_of": {"type": "string"},
-                "direction": {"type": "string", "enum": ["outgoing", "incoming", "both"]}
+                "query": {"type": "string", "description": "Search query"},
+                "n_results": {"type": "integer", "description": "Number of results to return", "default": 5}
+            },
+            "required": ["query"]
+        }),
+        Tool(name="mempalace_kg_query", description="Query the knowledge graph for an entity and its relationships", inputSchema={
+            "type": "object",
+            "properties": {
+                "entity": {"type": "string", "description": "Entity name to look up"},
+                "as_of": {"type": "string", "description": "Optional ISO date to query historical state"},
+                "direction": {"type": "string", "enum": ["outgoing", "incoming", "both"], "default": "both"}
             },
             "required": ["entity"]
         }),
-        # Note: Additional tools are available via fallback/bridge
+        Tool(name="mempalace_kg_add", description="Add facts or observations to the knowledge graph", inputSchema={
+            "type": "object",
+            "properties": {
+                "subject": {"type": "string", "description": "Subject entity"},
+                "predicate": {"type": "string", "description": "Relationship predicate"},
+                "object": {"type": "string", "description": "Object entity or value"},
+                "started": {"type": "string", "description": "Optional ISO date the fact became true"}
+            },
+            "required": ["subject", "predicate", "object"]
+        }),
+        Tool(name="add_observations", description="Alias for mempalace_kg_add — add facts to the knowledge graph", inputSchema={
+            "type": "object",
+            "properties": {
+                "subject": {"type": "string"},
+                "predicate": {"type": "string"},
+                "object": {"type": "string"},
+                "started": {"type": "string"}
+            },
+            "required": ["subject", "predicate", "object"]
+        }),
     ]
 
 @mcp_server.call_tool()
@@ -80,7 +107,7 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
 # ---------------------------------------------------------
 # 2. FastAPI Setup - MCP API (Port 8000)
 # ---------------------------------------------------------
-mcp_app = FastAPI(title="MemPalace MCP API")
+mcp_app = FastAPI(title="MemPalace MCP API", redirect_slashes=False)
 sse_transport = SseServerTransport("/messages")
 
 mcp_app.add_middleware(
