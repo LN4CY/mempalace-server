@@ -81,7 +81,7 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
 # 2. FastAPI Setup - MCP API (Port 8000)
 # ---------------------------------------------------------
 mcp_app = FastAPI(title="MemPalace MCP API")
-sse_transport = SseServerTransport("/sse")
+sse_transport = SseServerTransport("/messages")
 
 mcp_app.add_middleware(
     CORSMiddleware,
