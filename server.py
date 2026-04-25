@@ -151,7 +151,7 @@ viz_app.add_middleware(
 async def get_graph():
     """Retrieve the full Knowledge Graph for the dashboard."""
     try:
-        timeline = tool_kg_timeline()
+        timeline = TOOLS["mempalace_kg_timeline"]["handler"]({})
         cy_data = {"nodes": [], "edges": []}
         entities = set()
         
