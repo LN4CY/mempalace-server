@@ -20,9 +20,7 @@ from mcp.server.sse import SseServerTransport # noqa: E402
 from mcp.types import Tool, TextContent # noqa: E402
 
 # Import core MemPalace logic (from vendored package)
-from mempalace.mcp_server import ( # noqa: E402
-    tool_status, tool_list_wings, tool_search, tool_kg_query, tool_kg_add, tool_kg_timeline
-)
+from mempalace.mcp_server import TOOLS # noqa: E402
 
 # Configuration
 PORT_API = int(os.getenv("PORT_API", "8000"))
@@ -44,69 +42,53 @@ mcp_server = Server("mempalace-server")
 # Register Tools
 @mcp_server.list_tools()
 async def list_tools() -> List[Tool]:
-    """List available MemPalace tools."""
-    return [
-        Tool(name="mempalace_status", description="Palace overview + AAAK spec", inputSchema={"type": "object"}),
-        Tool(name="mempalace_list_wings", description="List memory wings with document counts", inputSchema={"type": "object"}),
-        Tool(name="mempalace_search", description="Semantic search across all stored memories", inputSchema={
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"},
-                "n_results": {"type": "integer", "description": "Number of results to return", "default": 5}
-            },
-            "required": ["query"]
-        }),
-        Tool(name="mempalace_kg_query", description="Query the knowledge graph for an entity and its relationships", inputSchema={
-            "type": "object",
-            "properties": {
-                "entity": {"type": "string", "description": "Entity name to look up"},
-                "as_of": {"type": "string", "description": "Optional ISO date to query historical state"},
-                "direction": {"type": "string", "enum": ["outgoing", "incoming", "both"], "default": "both"}
-            },
-            "required": ["entity"]
-        }),
-        Tool(name="mempalace_kg_add", description="Add facts or observations to the knowledge graph", inputSchema={
-            "type": "object",
-            "properties": {
-                "subject": {"type": "string", "description": "Subject entity"},
-                "predicate": {"type": "string", "description": "Relationship predicate"},
-                "object": {"type": "string", "description": "Object entity or value"},
-                "started": {"type": "string", "description": "Optional ISO date the fact became true"}
-            },
-            "required": ["subject", "predicate", "object"]
-        }),
-        Tool(name="add_observations", description="Alias for mempalace_kg_add — add facts to the knowledge graph", inputSchema={
-            "type": "object",
-            "properties": {
-                "subject": {"type": "string"},
-                "predicate": {"type": "string"},
-                "object": {"type": "string"},
-                "started": {"type": "string"}
-            },
-            "required": ["subject", "predicate", "object"]
-        }),
-    ]
+    """List available MemPalace tools dynamically from the core registry."""
+    tools_list = []
+    for name, config in TOOLS.items():
+        tools_list.append(Tool(
+            name=name,
+            description=config["description"],
+            inputSchema=config["input_schema"]
+        ))
+    
+    # Add alias for backwards compatibility with older prompts
+    tools_list.append(Tool(
+        name="add_observations",
+        description="Alias for mempalace_kg_add — add facts to the knowledge graph",
+        inputSchema=TOOLS["mempalace_kg_add"]["input_schema"]
+    ))
+    return tools_list
 
 @mcp_server.call_tool()
 async def call_tool(name: str, arguments: Any) -> List[TextContent]:
-    """Execute a MemPalace tool."""
-    # Mapping table for simplicity 
-    tool_map = {
-        "mempalace_status": tool_status,
-        "mempalace_list_wings": tool_list_wings,
-        "mempalace_kg_query": lambda args: tool_kg_query(**args),
-        "mempalace_search": lambda args: tool_search(**args),
-        "add_observations": lambda args: tool_kg_add(**args), # Alias for compatibility
-        "mempalace_kg_add": lambda args: tool_kg_add(**args),
-    }
+    """Execute a MemPalace tool dynamically."""
     
-    if name not in tool_map:
+    # Resolve alias
+    if name == "add_observations":
+        name = "mempalace_kg_add"
+        
+    if name not in TOOLS:
         logger.warning(f"⚠️ Tool rejected: '{name}' not supported by bridge.")
         return [TextContent(type="text", text=f"Error: Tool '{name}' not supported by bridge.")]
     
+    # Coerce arguments if necessary (similar to core mcp_server logic)
+    schema_props = TOOLS[name]["input_schema"].get("properties", {})
+    tool_args = {k: v for k, v in arguments.items() if k in schema_props}
+    
+    for key, value in list(tool_args.items()):
+        prop_schema = schema_props.get(key, {})
+        declared_type = prop_schema.get("type")
+        try:
+            if declared_type == "integer" and not isinstance(value, int):
+                tool_args[key] = int(value)
+            elif declared_type == "number" and not isinstance(value, (int, float)):
+                tool_args[key] = float(value)
+        except (ValueError, TypeError):
+            return [TextContent(type="text", text=f"Invalid value for parameter '{key}'")]
+    
     try:
-        logger.info(f"🔨 Executing tool: {name} | args: {json.dumps(arguments)}")
-        result = tool_map[name](arguments)
+        logger.info(f"🔨 Executing tool: {name} | args: {json.dumps(tool_args)}")
+        result = TOOLS[name]["handler"](**tool_args)
         logger.info(f"✅ Tool {name} completed successfully")
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
     except Exception as e:
