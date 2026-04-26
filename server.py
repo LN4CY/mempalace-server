@@ -148,34 +148,47 @@ viz_app.add_middleware(
 )
 
 @viz_app.get("/api/graph")
-async def get_graph():
-    """Retrieve the full Knowledge Graph for the dashboard."""
+async def get_graph(include_expired: bool = False):
+    """Retrieve the Knowledge Graph for the dashboard.
+
+    By default only returns currently-active facts (valid_to IS NULL).
+    Pass ?include_expired=true to include invalidated facts (shown as dashed edges).
+    """
     try:
         timeline = TOOLS["mempalace_kg_timeline"]["handler"]()
         cy_data = {"nodes": [], "edges": []}
         entities = set()
-        
+        seen_edges: set = set()
+
         for fact in timeline.get("timeline", []):
             subj = fact.get("subject")
             obj = fact.get("object")
             pred = fact.get("predicate")
-            
+            expired = fact.get("valid_to") is not None
+
+            if expired and not include_expired:
+                continue
+
             if subj and subj not in entities:
                 cy_data["nodes"].append({"data": {"id": subj, "label": subj, "type": "entity"}})
                 entities.add(subj)
             if obj and obj not in entities:
                 cy_data["nodes"].append({"data": {"id": obj, "label": obj, "type": "entity"}})
                 entities.add(obj)
-            
+
             if subj and obj:
-                cy_data["edges"].append({
-                    "data": {
-                        "source": subj,
-                        "target": obj,
-                        "label": pred
-                    }
-                })
-            
+                edge_key = (subj, pred, obj)
+                if edge_key not in seen_edges:
+                    seen_edges.add(edge_key)
+                    cy_data["edges"].append({
+                        "data": {
+                            "source": subj,
+                            "target": obj,
+                            "label": pred,
+                            "expired": expired,
+                        }
+                    })
+
         return cy_data
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
