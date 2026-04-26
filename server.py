@@ -22,6 +22,20 @@ from mcp.types import Tool, TextContent # noqa: E402
 # Import core MemPalace logic (from vendored package)
 from mempalace.mcp_server import TOOLS # noqa: E402
 
+# Fix: The upstream submodule only places the KnowledgeGraph under
+# palace_path when --palace is passed via CLI.  Since we launch via
+# server.py (not the submodule's __main__), the KG defaults to
+# ~/.mempalace/ — which is ephemeral inside Docker and wiped on every
+# image pull.  Re-initialise _kg so it respects MEMPALACE_PALACE_PATH.
+import mempalace.mcp_server as _mcp_mod  # noqa: E402
+from mempalace.knowledge_graph import KnowledgeGraph as _KG  # noqa: E402
+from mempalace.config import MempalaceConfig as _Cfg  # noqa: E402
+
+_palace_cfg = _Cfg()
+_mcp_mod._kg = _KG(
+    db_path=os.path.join(_palace_cfg.palace_path, "knowledge_graph.sqlite3")
+)
+
 # Configuration
 PORT_API = int(os.getenv("PORT_API", "8000"))
 PORT_DASHBOARD = int(os.getenv("PORT_DASHBOARD", "8080"))
