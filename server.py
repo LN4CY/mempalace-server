@@ -151,20 +151,42 @@ viz_app.add_middleware(
 async def get_graph(include_expired: bool = False):
     """Retrieve the Knowledge Graph for the dashboard.
 
+    Queries the KG SQLite database directly to bypass the upstream
+    ``KnowledgeGraph.timeline()`` LIMIT 100 cap so the dashboard can
+    render the full graph.
+
     By default only returns currently-active facts (valid_to IS NULL).
     Pass ?include_expired=true to include invalidated facts (shown as dashed edges).
     """
+    import sqlite3
+
     try:
-        timeline = TOOLS["mempalace_kg_timeline"]["handler"]()
+        # Access the KG db_path via the handler's module-level _kg instance
+        from mempalace.mcp_server import _kg
+        db_path = _kg.db_path
+
+        conn = sqlite3.connect(db_path, timeout=10)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("""
+            SELECT t.subject, t.predicate, t.object,
+                   t.valid_from, t.valid_to,
+                   s.name AS sub_name, o.name AS obj_name
+            FROM triples t
+            JOIN entities s ON t.subject = s.id
+            JOIN entities o ON t.object = o.id
+            ORDER BY t.valid_from ASC
+        """).fetchall()
+        conn.close()
+
         cy_data = {"nodes": [], "edges": []}
         entities = set()
         seen_edges: set = set()
 
-        for fact in timeline.get("timeline", []):
-            subj = fact.get("subject")
-            obj = fact.get("object")
-            pred = fact.get("predicate")
-            expired = fact.get("valid_to") is not None
+        for row in rows:
+            subj = row["sub_name"]
+            obj = row["obj_name"]
+            pred = row["predicate"]
+            expired = row["valid_to"] is not None
 
             if expired and not include_expired:
                 continue
