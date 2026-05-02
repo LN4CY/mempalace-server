@@ -216,8 +216,14 @@ async def get_graph(include_expired: bool = False):
                 edge_key = (subj, pred, obj)
                 if edge_key not in seen_edges:
                     seen_edges.add(edge_key)
+
+                    # Generate deterministic ID for the edge so Cytoscape can diff it
+                    # use a stable hash or simply a composite string
+                    edge_id = f"{subj}::{(pred)}::{obj}"
+
                     cy_data["edges"].append({
                         "data": {
+                            "id": edge_id,
                             "source": subj,
                             "target": obj,
                             "label": pred,
