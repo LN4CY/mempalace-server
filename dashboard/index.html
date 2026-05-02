@@ -7,311 +7,787 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
     <style>
         :root {
-            --bg-color: #0a0e14;
-            --panel-bg: rgba(16, 22, 32, 0.85);
-            --accent-primary: #4dc9f6;
-            --accent-secondary: #7dd8f8;
-            --text-main: #e6edf3;
-            --text-dim: #8b949e;
-            --border-color: #30363d;
+            --bg:       #0a0e14;
+            --panel:    rgba(16, 22, 32, 0.92);
+            --accent:   #4dc9f6;
+            --accent2:  #7dd8f8;
+            --text:     #e6edf3;
+            --muted:    #8b949e;
+            --border:   #30363d;
         }
+
+        *, *::before, *::after { box-sizing: border-box; }
 
         body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: var(--bg-color);
-            color: var(--text-main);
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background: var(--bg);
+            color: var(--text);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
             overflow: hidden;
+            font-size: 13px;
         }
 
-        #app {
-            display: flex;
-            width: 100%;
-            height: 100%;
-        }
+        #app { display: flex; width: 100%; height: 100%; }
 
+        /* ── canvas ── */
         #cy {
             flex-grow: 1;
             height: 100%;
-            background: radial-gradient(circle at center, #161b22 0%, #0a0e14 100%);
+            background: radial-gradient(circle at center, #161b22 0%, var(--bg) 100%);
         }
 
+        /* ── controls overlay ── */
+        .top-controls {
+            position: absolute;
+            top: 14px; left: 14px;
+            display: flex; gap: 6px; align-items: center;
+            z-index: 20;
+        }
+
+        .ctrl-btn {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 13px;
+            border-radius: 7px;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            font-size: 12px;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .ctrl-btn:hover  { border-color: var(--accent); background: rgba(77,201,246,0.08); }
+        .ctrl-btn.active { border-color: var(--accent); background: rgba(77,201,246,0.14); color: var(--accent); }
+
+        .live-dot {
+            font-size: 11px; padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(77,201,246,0.08);
+            color: var(--accent);
+            border: 1px solid rgba(77,201,246,0.2);
+        }
+        .live-dot::before { content: "● "; }
+        .live-dot.pulse::before { animation: blink 1.4s step-start infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* ── sidebar ── */
         #sidebar {
-            width: 380px;
-            background-color: var(--panel-bg);
-            border-left: 1px solid var(--border-color);
-            backdrop-filter: blur(12px);
-            padding: 24px;
+            width: 300px;
+            flex-shrink: 0;
+            background: var(--panel);
+            border-left: 1px solid var(--border);
+            backdrop-filter: blur(14px);
+            padding: 18px 16px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+            gap: 18px;
+            box-shadow: -8px 0 28px rgba(0,0,0,0.45);
         }
 
-        .header {
-            margin-bottom: 32px;
-        }
-
-        .header h1 {
-            font-size: 24px;
-            font-weight: 700;
-            margin: 0;
-            letter-spacing: -0.5px;
-            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+        /* header */
+        .sb-title {
+            font-size: 18px; font-weight: 700; margin: 0 0 3px;
+            letter-spacing: -0.4px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+        .sb-sub { color: var(--muted); font-size: 11px; margin: 0; }
 
-        .header p {
-            color: var(--text-dim);
-            font-size: 13px;
-            margin-top: 4px;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 32px;
-        }
-
+        /* stats */
+        .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .stat-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-color);
-            padding: 16px;
-            border-radius: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            padding: 10px 12px;
+            border-radius: 9px;
         }
+        .stat-card span { display: block; font-size: 10px; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+        .stat-card strong { font-size: 17px; color: var(--accent); }
 
-        .stat-card span {
-            display: block;
+        /* section divider */
+        .section { border-top: 1px solid var(--border); padding-top: 14px; }
+        .section-hd {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--muted); margin-bottom: 9px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .section-hd a { color: var(--accent); text-decoration: none; opacity: 0.7; font-size: 10px; }
+        .section-hd a:hover { opacity: 1; }
+
+        /* layout buttons */
+        .layout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .lay-btn {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 5px 8px;
+            border-radius: 6px;
+            cursor: pointer;
             font-size: 11px;
-            text-transform: uppercase;
-            color: var(--text-dim);
-            margin-bottom: 4px;
+            text-align: center;
+            transition: all 0.12s;
         }
+        .lay-btn:hover  { border-color: var(--accent); color: var(--text); }
+        .lay-btn.active { border-color: var(--accent); background: rgba(77,201,246,0.1); color: var(--accent); }
 
-        .stat-card strong {
-            font-size: 20px;
-            color: var(--accent-primary);
+        /* relation filter list */
+        #rel-filter-list {
+            max-height: 190px;
+            overflow-y: auto;
+            display: flex; flex-direction: column; gap: 1px;
         }
-
-        .node-info {
-            flex-grow: 1;
+        .rel-row {
+            display: flex; align-items: center; gap: 7px;
+            padding: 5px 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.1s;
         }
+        .rel-row:hover { background: rgba(255,255,255,0.04); }
+        .rel-row input[type=checkbox] { accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+        .rel-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .rel-name { flex-grow: 1; color: var(--text); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rel-count { color: var(--muted); font-size: 10px; flex-shrink: 0; }
 
+        /* node info card */
         .info-card {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
-            padding: 20px;
-            border: 1px solid var(--accent-primary);
+            background: rgba(255,255,255,0.04);
+            border-radius: 11px;
+            padding: 14px;
+            border: 1px solid var(--accent);
             display: none;
         }
+        .info-card.active { display: block; animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:translateY(0); } }
 
-        .info-card.active {
-            display: block;
-            animation: fadeIn 0.3s ease-out;
+        .info-pill {
+            display: inline-block; padding: 2px 8px; border-radius: 20px;
+            font-size: 10px; background: rgba(77,201,246,0.1);
+            color: var(--accent); border: 1px solid rgba(77,201,246,0.2);
+            margin-bottom: 8px;
         }
+        .info-name { margin: 0 0 12px; color: var(--accent); font-size: 14px; font-weight: 600; word-break: break-all; }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .conn-group { margin-bottom: 10px; }
+        .conn-pred {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 10px; color: var(--muted); text-transform: uppercase;
+            letter-spacing: 0.06em; margin-bottom: 5px;
         }
+        .conn-targets { display: flex; flex-wrap: wrap; gap: 4px; }
+        .conn-chip {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--border);
+            border-radius: 4px; padding: 2px 8px;
+            font-size: 11px; cursor: pointer;
+            transition: border-color 0.1s, background 0.1s;
+        }
+        .conn-chip:hover { border-color: var(--accent); background: rgba(77,201,246,0.08); }
 
-        .info-card h3 {
-            margin-top: 0;
-            color: var(--accent-primary);
-        }
-
-        .pill {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            background: rgba(77, 201, 246, 0.1);
-            color: var(--accent-primary);
-            border: 1px solid rgba(77, 201, 246, 0.2);
-            margin-bottom: 12px;
-        }
-
-        .empty-state {
-            text-align: center;
-            color: var(--text-dim);
-            margin-top: 60px;
-        }
-
-        .controls {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            display: flex;
-            gap: 8px;
-            z-index: 10;
-        }
-
-        button {
-            background: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            backdrop-filter: blur(8px);
-            transition: all 0.2s;
-        }
-
-        button:hover {
-            border-color: var(--accent-primary);
-            background: rgba(77, 201, 246, 0.1);
-        }
+        .empty-state { text-align: center; color: var(--muted); padding: 16px 0; font-size: 12px; }
+        .no-conns { color: var(--muted); font-size: 11px; margin: 4px 0 0; font-style: italic; }
     </style>
 </head>
 <body>
-    <div id="app">
-        <div class="controls">
-            <button onclick="refreshData()">↻ Refresh Graph</button>
-            <button onclick="cy.fit()">⛶ Fit View</button>
+<div id="app">
+    <!-- floating controls over the canvas -->
+    <div class="top-controls">
+        <button class="ctrl-btn" onclick="manualRefresh()">↻ Refresh</button>
+        <button class="ctrl-btn" onclick="cy && cy.fit()">⛶ Fit</button>
+        <button class="ctrl-btn" id="btn-expired" onclick="toggleExpired()">Show Expired</button>
+        <span class="live-dot pulse" id="live-badge">Live</span>
+    </div>
+
+    <div id="cy"></div>
+
+    <div id="sidebar">
+        <!-- header -->
+        <div>
+            <p class="sb-title">MemPalace Explorer</p>
+            <p class="sb-sub">Knowledge Graph Visualization</p>
         </div>
-        <div id="cy"></div>
-        <div id="sidebar">
-            <div class="header">
-                <h1>MemPalace Explorer</h1>
-                <p>Knowledge Graph Visualization v3.1</p>
-            </div>
 
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <span>Entities</span>
-                    <strong id="stat-nodes">0</strong>
-                </div>
-                <div class="stat-card">
-                    <span>Relations</span>
-                    <strong id="stat-edges">0</strong>
-                </div>
-            </div>
+        <!-- stats -->
+        <div class="stats-row">
+            <div class="stat-card"><span>Entities</span><strong id="stat-nodes">0</strong></div>
+            <div class="stat-card"><span>Relations</span><strong id="stat-edges">0</strong></div>
+        </div>
 
-            <div class="node-info">
-                <div id="empty-state" class="empty-state">
-                    <p>Select a node in the graph to view details.</p>
-                </div>
-                <div id="info-card" class="info-card">
-                    <span class="pill" id="node-type">ENTITY</span>
-                    <h3 id="node-label">Entity Name</h3>
-                    <div id="node-details">
-                        <!-- Dynamic content -->
-                    </div>
-                </div>
+        <!-- layout -->
+        <div class="section">
+            <div class="section-hd">Layout</div>
+            <div class="layout-grid">
+                <button class="lay-btn active" id="lay-force"      onclick="setLayout('force')">Force</button>
+                <button class="lay-btn"        id="lay-radial"     onclick="setLayout('radial')">Radial</button>
+                <button class="lay-btn"        id="lay-concentric" onclick="setLayout('concentric')">Concentric</button>
+                <button class="lay-btn"        id="lay-grid"       onclick="setLayout('grid')">Grid</button>
+            </div>
+        </div>
+
+        <!-- relation type filter -->
+        <div class="section">
+            <div class="section-hd">
+                Relation Types
+                <span>
+                    <a href="#" onclick="selectAllRels(event)">all</a> ·
+                    <a href="#" onclick="selectNoneRels(event)">none</a>
+                </span>
+            </div>
+            <div id="rel-filter-list"><p class="no-conns">Loading…</p></div>
+        </div>
+
+        <!-- selected node detail -->
+        <div class="section">
+            <div id="empty-state" class="empty-state">
+                <p>Select a node to see its connections.</p>
+            </div>
+            <div id="info-card" class="info-card">
+                <span class="info-pill" id="node-type">ENTITY</span>
+                <p class="info-name" id="node-label"></p>
+                <div id="node-connections"></div>
             </div>
         </div>
     </div>
+</div>
 
-    <script>
-        let cy;
+<script>
+    /* ── palette ─────────────────────────────────────────────────── */
+    const PALETTE = [
+        '#4dc9f6','#f67019','#f53794','#537bc4',
+        '#acc236','#00a950','#8549ba','#ff6b6b',
+        '#ffd93d','#06d6a0','#ef476f','#118ab2',
+    ];
 
-        async function initGraph() {
-            const data = await fetchGraphData();
-            
-            cy = cytoscape({
-                container: document.getElementById('cy'),
-                elements: data,
-                style: [
-                    {
-                        selector: 'node',
-                        style: {
-                            'background-color': '#1f2937',
-                            'label': 'data(label)',
-                            'color': '#e6edf3',
-                            'font-size': '12px',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'width': '40px',
-                            'height': '40px',
-                            'border-width': 2,
-                            'border-color': '#4dc9f6',
-                            'text-margin-y': '24px'
-                        }
-                    },
-                    {
-                        selector: 'edge',
-                        style: {
-                            'width': 2,
-                            'line-color': '#30363d',
-                            'target-arrow-color': '#30363d',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'label': 'data(label)',
-                            'font-size': '10px',
-                            'color': '#8b949e',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': '-10px'
-                        }
-                    },
-                    {
-                        selector: 'node:selected',
-                        style: {
-                            'background-color': '#4dc9f6',
-                            'border-color': '#fff',
-                            'border-width': 3
-                        }
-                    }
-                ],
-                layout: {
-                    name: 'cose',
-                    animate: true,
-                    nodeOverlap: 20,
-                    componentSpacing: 100
-                }
-            });
+    /* ── state ───────────────────────────────────────────────────── */
+    let cy              = null;
+    let allData         = { nodes: [], edges: [] };
+    let predicateColors = new Map();   // predicate → color string
+    let activePredicates = new Set();  // predicates currently shown
+    let selectedNodeId  = null;
+    let currentLayout   = 'force';
+    let showExpired     = false;
+    let pollInterval    = null;
 
-            cy.on('select', 'node', function(evt){
-                showNodeInfo(evt.target.data());
-            });
+    const POLL_MS = 15000;
 
-            cy.on('unselect', 'node', function(){
-                hideNodeInfo();
-            });
+    /* ── layout configs ──────────────────────────────────────────── */
+    const LAYOUTS = {
+        force: {
+            name: 'cose', animate: true, animationDuration: 600,
+            fit: true, padding: 50,
+            nodeRepulsion: 8000, nodeOverlap: 50,
+            idealEdgeLength: 100, edgeElasticity: 80,
+            nestingFactor: 1.2, gravity: 0.8,
+            numIter: 1000, initialTemp: 200, coolingFactor: 0.95, minTemp: 1.0,
+        },
+        radial: {
+            name: 'breadthfirst', animate: true,
+            directed: false, spacingFactor: 1.9,
+            fit: true, padding: 50,
+        },
+        concentric: {
+            name: 'concentric', animate: true,
+            fit: true, padding: 50, minNodeSpacing: 60,
+            concentric: n => n.degree(),
+            levelWidth: () => 3,
+        },
+        grid: {
+            name: 'grid', animate: true,
+            fit: true, padding: 50, spacingFactor: 1.5,
+        },
+    };
 
-            updateStats(data);
+    /* ── stylesheet builder ──────────────────────────────────────── */
+    function rebuildStyle() {
+        if (!cy) return;
+        const rules = [];
+
+        rules.push({ selector: 'node', style: {
+            'background-color': '#1f2937',
+            'label': 'data(label)',
+            'color': '#c9d1d9',
+            'font-size': '10px',
+            'text-valign': 'bottom',
+            'text-halign': 'center',
+            'width': '36px', 'height': '36px',
+            'border-width': 2, 'border-color': '#30363d',
+            'text-margin-y': '5px',
+            'text-background-color': '#0a0e14',
+            'text-background-opacity': 0.65,
+            'text-background-padding': '2px',
+        }});
+
+        rules.push({ selector: 'edge', style: {
+            'width': 1.5,
+            'line-color': '#30363d',
+            'target-arrow-color': '#30363d',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            'label': 'data(label)',
+            'font-size': '9px',
+            'color': '#555',
+            'text-rotation': 'autorotate',
+            'text-margin-y': '-8px',
+            'text-background-color': '#0a0e14',
+            'text-background-opacity': 0.75,
+            'text-background-padding': '2px',
+        }});
+
+        rules.push({ selector: 'edge[?expired]', style: { 'line-style': 'dashed', 'opacity': 0.35 }});
+
+        // Per-predicate edge colors — after base edge, before dimmed
+        predicateColors.forEach((color, pred) => {
+            const safe = pred.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            rules.push({ selector: `edge[label = "${safe}"]`, style: {
+                'line-color': color,
+                'target-arrow-color': color,
+                'color': color,
+            }});
+        });
+
+        // Dimmed — de-emphasizes everything except the selection neighbourhood
+        rules.push({ selector: '.dimmed',    style: { 'opacity': 0.10 }});
+
+        // Highlighted — 1-hop neighbours of the selected node
+        rules.push({ selector: '.highlighted',      style: { 'opacity': 1 }});
+        rules.push({ selector: 'node.highlighted',  style: { 'border-color': '#4dc9f6', 'border-width': 2.5 }});
+        rules.push({ selector: 'edge.highlighted',  style: { 'width': 3 }});
+
+        // hidden-rel comes AFTER highlighted so filtered edges are never shown
+        rules.push({ selector: '.hidden-rel', style: { 'display': 'none' }});
+
+        // Selected node — always fully visible, prominent colour
+        rules.push({ selector: 'node:selected', style: {
+            'background-color': '#4dc9f6',
+            'border-color': '#fff',
+            'border-width': 3,
+            'color': '#0a0e14',
+            'opacity': 1,
+        }});
+
+        let s = cy.style();
+        for (const r of rules) s = s.selector(r.selector).style(r.style);
+        s.update();
+    }
+
+    /* ── data fetch ──────────────────────────────────────────────── */
+    async function fetchGraphData() {
+        try {
+            const url = showExpired ? '/api/graph?include_expired=true' : '/api/graph';
+            const res = await fetch(url);
+            return await res.json();
+        } catch (e) {
+            console.error('fetch /api/graph failed', e);
+            return { nodes: [], edges: [] };
+        }
+    }
+
+    /* ── predicate colours & filter UI ──────────────────────────── */
+    function syncPredicates(data) {
+        const counts = {};
+        for (const e of (data.edges || [])) {
+            const lbl = e.data?.label ?? '';
+            counts[lbl] = (counts[lbl] || 0) + 1;
         }
 
-        async function fetchGraphData() {
-            try {
-                const res = await fetch('/api/graph');
-                return await res.json();
-            } catch (e) {
-                console.error("Failed to fetch graph data", e);
-                return { nodes: [], edges: [] };
+        const preds = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+
+        // Assign colours to new predicates, track which are brand-new
+        const brandNew = [];
+        for (const p of preds) {
+            if (!predicateColors.has(p)) {
+                predicateColors.set(p, PALETTE[predicateColors.size % PALETTE.length]);
+                brandNew.push(p);
             }
         }
 
-        function updateStats(data) {
-            document.getElementById('stat-nodes').innerText = data.nodes.length;
-            document.getElementById('stat-edges').innerText = data.edges.length;
+        // On first load, activate all; on refresh, keep existing state and add new predicates
+        if (activePredicates.size === 0) {
+            activePredicates = new Set(preds);
+        } else {
+            for (const p of [...activePredicates]) {
+                if (!counts[p]) activePredicates.delete(p); // predicate gone from graph
+            }
+            for (const p of brandNew) {
+                activePredicates.add(p); // new predicate → active by default
+            }
         }
 
-        function showNodeInfo(data) {
-            document.getElementById('empty-state').style.display = 'none';
-            document.getElementById('info-card').classList.add('active');
-            document.getElementById('node-label').innerText = data.label;
-            document.getElementById('node-type').innerText = (data.type || "ENTITY").toUpperCase();
+        buildFilterUI(preds, counts);
+    }
+
+    function buildFilterUI(preds, counts) {
+        const list = document.getElementById('rel-filter-list');
+        list.innerHTML = '';
+
+        if (preds.length === 0) {
+            list.innerHTML = '<p class="no-conns">No relation types found.</p>';
+            return;
         }
 
-        function hideNodeInfo() {
-            document.getElementById('empty-state').style.display = 'block';
-            document.getElementById('info-card').classList.remove('active');
+        for (const pred of preds) {
+            const color = predicateColors.get(pred);
+            const row = document.createElement('label');
+            row.className = 'rel-row';
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = activePredicates.has(pred);
+            cb.dataset.pred = pred;
+            cb.addEventListener('change', () => {
+                if (cb.checked) activePredicates.add(pred);
+                else            activePredicates.delete(pred);
+                applyVisibility();
+                if (selectedNodeId) refreshInfoCard(selectedNodeId);
+            });
+
+            const dot  = document.createElement('span');
+            dot.className = 'rel-dot';
+            dot.style.background = color;
+
+            const name = document.createElement('span');
+            name.className = 'rel-name';
+            name.textContent = pred;
+
+            const cnt = document.createElement('span');
+            cnt.className = 'rel-count';
+            cnt.textContent = counts[pred];
+
+            row.append(cb, dot, name, cnt);
+            list.appendChild(row);
+        }
+    }
+
+    function selectAllRels(e) {
+        e.preventDefault();
+        document.querySelectorAll('#rel-filter-list input[type=checkbox]').forEach(cb => {
+            cb.checked = true;
+            activePredicates.add(cb.dataset.pred);
+        });
+        applyVisibility();
+        if (selectedNodeId) refreshInfoCard(selectedNodeId);
+    }
+
+    function selectNoneRels(e) {
+        e.preventDefault();
+        document.querySelectorAll('#rel-filter-list input[type=checkbox]').forEach(cb => {
+            cb.checked = false;
+            activePredicates.delete(cb.dataset.pred);
+        });
+        applyVisibility();
+        if (selectedNodeId) refreshInfoCard(selectedNodeId);
+    }
+
+    /* ── visibility: filter + selection highlight ────────────────── */
+    function applyVisibility() {
+        if (!cy) return;
+
+        cy.batch(() => {
+            // 1. Apply relation filter — hide edges whose predicate is not active
+            cy.edges().forEach(edge => {
+                const lbl = edge.data('label');
+                if (!activePredicates.has(lbl)) edge.addClass('hidden-rel');
+                else                            edge.removeClass('hidden-rel');
+            });
+
+            // 2. Selection neighbourhood highlight
+            cy.elements().removeClass('dimmed highlighted');
+
+            if (selectedNodeId) {
+                const sel = cy.$id(selectedNodeId);
+                if (!sel.length) return;
+
+                // Only consider edges that pass the relation filter
+                const visEdges    = sel.connectedEdges().not('.hidden-rel');
+                const neighbours  = visEdges.connectedNodes().not(sel);
+
+                cy.elements().addClass('dimmed');
+                sel.removeClass('dimmed');                          // selected node: use :selected style
+                neighbours.removeClass('dimmed').addClass('highlighted');
+                visEdges.removeClass('dimmed').addClass('highlighted');
+            }
+        });
+    }
+
+    /* ── node info panel ─────────────────────────────────────────── */
+    function showNodeInfo(nodeId) {
+        selectedNodeId = nodeId;
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('info-card').classList.add('active');
+        const data = cy.$id(nodeId).data();
+        document.getElementById('node-label').textContent = data.label || nodeId;
+        document.getElementById('node-type').textContent  = (data.type || 'ENTITY').toUpperCase();
+        refreshInfoCard(nodeId);
+        applyVisibility();
+    }
+
+    function refreshInfoCard(nodeId) {
+        const container = document.getElementById('node-connections');
+        container.innerHTML = '';
+
+        const node = cy.$id(nodeId);
+        if (!node.length) return;
+
+        const byPred = {};
+        node.connectedEdges().not('.hidden-rel').forEach(edge => {
+            const pred  = edge.data('label');
+            const other = edge.source().id() === nodeId ? edge.target() : edge.source();
+            if (!byPred[pred]) byPred[pred] = [];
+            byPred[pred].push({ id: other.id(), label: other.data('label') || other.id() });
+        });
+
+        const groups = Object.entries(byPred);
+        if (groups.length === 0) {
+            container.innerHTML = '<p class="no-conns">No visible connections — check filters.</p>';
+            return;
         }
 
-        async function refreshData() {
-            const data = await fetchGraphData();
-            cy.elements().remove();
-            cy.add(data);
-            cy.layout({ name: 'cose', animate: true }).run();
-            updateStats(data);
+        for (const [pred, targets] of groups) {
+            const color = predicateColors.get(pred) || '#888';
+            const grp = document.createElement('div');
+            grp.className = 'conn-group';
+
+            const predRow = document.createElement('div');
+            predRow.className = 'conn-pred';
+            const dot = document.createElement('span');
+            dot.className = 'rel-dot';
+            dot.style.background = color;
+            predRow.append(dot, document.createTextNode(pred));
+
+            const chips = document.createElement('div');
+            chips.className = 'conn-targets';
+            for (const t of targets) {
+                const chip = document.createElement('span');
+                chip.className = 'conn-chip';
+                chip.textContent = t.label;
+                chip.title = t.id;
+                chip.addEventListener('click', () => {
+                    const n = cy.$id(t.id);
+                    if (n.length) {
+                        cy.animate({ fit: { eles: n, padding: 100 } }, { duration: 300 });
+                        cy.$(':selected').unselect();
+                        n.select();
+                        showNodeInfo(t.id);
+                    }
+                });
+                chips.appendChild(chip);
+            }
+
+            grp.append(predRow, chips);
+            container.appendChild(grp);
+        }
+    }
+
+    function hideNodeInfo() {
+        selectedNodeId = null;
+        document.getElementById('empty-state').style.display = 'block';
+        document.getElementById('info-card').classList.remove('active');
+        applyVisibility();
+    }
+
+    /* ── layout ──────────────────────────────────────────────────── */
+    function setLayout(name) {
+        currentLayout = name;
+        document.querySelectorAll('.lay-btn').forEach(b => b.classList.remove('active'));
+        const btn = document.getElementById('lay-' + name);
+        if (btn) btn.classList.add('active');
+
+        // Disable layout animations for large graphs (e.g., > 500 nodes)
+        const opts = Object.assign({}, LAYOUTS[name]);
+        if (cy.nodes().length > 500) {
+            opts.animate = false;
+        }
+        cy.layout(opts).run();
+    }
+
+    /* ── data load & refresh ─────────────────────────────────────── */
+    function updateStats(data) {
+        document.getElementById('stat-nodes').textContent = (data.nodes || []).length;
+        document.getElementById('stat-edges').textContent = (data.edges || []).length;
+    }
+
+    async function loadData(reLayout) {
+        const fresh = await fetchGraphData();
+
+        // Map current elements
+        const currentNodes = new Set(cy.nodes().map(n => n.id()));
+        const currentEdges = new Set(cy.edges().map(e => e.id()));
+
+        const freshNodeIds = new Set(fresh.nodes.map(n => n.data.id));
+        const freshEdgeIds = new Set(fresh.edges.map(e => e.data.id));
+
+        // Determine what to add and remove
+        const nodesToAdd = fresh.nodes.filter(n => !currentNodes.has(n.data.id));
+        const edgesToAdd = fresh.edges.filter(e => !currentEdges.has(e.data.id));
+
+        const nodesToRemove = cy.nodes().filter(n => !freshNodeIds.has(n.id()));
+        const edgesToRemove = cy.edges().filter(e => !freshEdgeIds.has(e.id()));
+
+        // Also update expired state of existing edges
+        const edgesToUpdate = [];
+        fresh.edges.forEach(e => {
+            if (currentEdges.has(e.data.id)) {
+                const existingEdge = cy.$id(e.data.id);
+                if (existingEdge.data('expired') !== e.data.expired) {
+                    edgesToUpdate.push({ id: e.data.id, expired: e.data.expired });
+                }
+            }
+        });
+
+        allData = fresh;
+        const prevSel = selectedNodeId;
+
+        cy.batch(() => {
+            nodesToRemove.remove();
+            edgesToRemove.remove();
+
+            if (nodesToAdd.length > 0) cy.add(nodesToAdd);
+            if (edgesToAdd.length > 0) cy.add(edgesToAdd);
+
+            edgesToUpdate.forEach(update => {
+                cy.$id(update.id).data('expired', update.expired);
+            });
+        });
+
+        syncPredicates(allData);
+        rebuildStyle();
+        applyVisibility();
+        updateStats(allData);
+
+        if (reLayout) {
+            const opts = Object.assign({}, LAYOUTS[currentLayout]);
+            if (cy.nodes().length > 500) opts.animate = false;
+            cy.layout(opts).run();
         }
 
-        window.onload = initGraph;
-    </script>
+        // Restore selection if the node still exists
+        if (prevSel && cy.$id(prevSel).length) {
+            cy.$id(prevSel).select();
+            showNodeInfo(prevSel);
+        }
+    }
+
+    async function manualRefresh() {
+        await loadData(true);
+    }
+
+    function toggleExpired() {
+        showExpired = !showExpired;
+        const btn = document.getElementById('btn-expired');
+        btn.textContent = showExpired ? 'Hide Expired' : 'Show Expired';
+        btn.classList.toggle('active', showExpired);
+        loadData(false);
+    }
+
+    /* ── auto-poll ───────────────────────────────────────────────── */
+    function startPolling() {
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = setInterval(async () => {
+            const badge = document.getElementById('live-badge');
+            badge.classList.remove('pulse');
+
+            const fresh = await fetchGraphData();
+
+            // Map current elements
+            const currentNodes = new Set(cy.nodes().map(n => n.id()));
+            const currentEdges = new Set(cy.edges().map(e => e.id()));
+
+            const freshNodeIds = new Set(fresh.nodes.map(n => n.data.id));
+            const freshEdgeIds = new Set(fresh.edges.map(e => e.data.id));
+
+            // Determine what to add and remove
+            const nodesToAdd = fresh.nodes.filter(n => !currentNodes.has(n.data.id));
+            const edgesToAdd = fresh.edges.filter(e => !currentEdges.has(e.data.id));
+
+            const nodesToRemove = cy.nodes().filter(n => !freshNodeIds.has(n.id()));
+            const edgesToRemove = cy.edges().filter(e => !freshEdgeIds.has(e.id()));
+
+            // Also update expired state of existing edges
+            const edgesToUpdate = [];
+            fresh.edges.forEach(e => {
+                if (currentEdges.has(e.data.id)) {
+                    const existingEdge = cy.$id(e.data.id);
+                    if (existingEdge.data('expired') !== e.data.expired) {
+                        edgesToUpdate.push({ id: e.data.id, expired: e.data.expired });
+                    }
+                }
+            });
+
+            if (nodesToAdd.length > 0 || edgesToAdd.length > 0 || nodesToRemove.length > 0 || edgesToRemove.length > 0 || edgesToUpdate.length > 0) {
+                allData = fresh;
+
+                cy.batch(() => {
+                    nodesToRemove.remove();
+                    edgesToRemove.remove();
+
+                    if (nodesToAdd.length > 0) cy.add(nodesToAdd);
+                    if (edgesToAdd.length > 0) cy.add(edgesToAdd);
+
+                    edgesToUpdate.forEach(update => {
+                        cy.$id(update.id).data('expired', update.expired);
+                    });
+                });
+
+                syncPredicates(fresh);
+                rebuildStyle();
+                applyVisibility();
+                updateStats(fresh);
+
+                if (nodesToAdd.length > 0) {
+                    const opts = Object.assign({}, LAYOUTS[currentLayout]);
+                    if (cy.nodes().length > 500) opts.animate = false;
+                    cy.layout(opts).run();
+                }
+
+                if (selectedNodeId && cy.$id(selectedNodeId).length) {
+                    cy.$id(selectedNodeId).select();
+                    showNodeInfo(selectedNodeId);
+                } else if (selectedNodeId) {
+                    hideNodeInfo();
+                }
+            }
+
+            badge.classList.add('pulse');
+        }, POLL_MS);
+    }
+
+    /* ── init ────────────────────────────────────────────────────── */
+    async function initGraph() {
+        allData = await fetchGraphData();
+
+        const opts = Object.assign({}, LAYOUTS.force);
+        if (allData.nodes && allData.nodes.length > 500) {
+            opts.animate = false;
+        }
+
+        cy = cytoscape({
+            container: document.getElementById('cy'),
+            elements: allData,
+            style: [],               // will be built by rebuildStyle()
+            layout: opts,
+            // Performance hints
+            textureOnViewport: true,
+            hideEdgesOnViewport: true,
+            hideLabelsOnViewport: true,
+            pixelRatio: 1,
+        });
+
+        cy.on('select', 'node',   evt => showNodeInfo(evt.target.id()));
+        cy.on('unselect', 'node', ()  => hideNodeInfo());
+
+        // clicking the canvas background deselects
+        cy.on('tap', evt => { if (evt.target === cy) { cy.$(':selected').unselect(); hideNodeInfo(); } });
+
+        syncPredicates(allData);
+        rebuildStyle();
+        applyVisibility();
+        updateStats(allData);
+        startPolling();
+    }
+
+    window.onload = initGraph;
+</script>
 </body>
 </html>
