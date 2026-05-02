@@ -484,29 +484,31 @@
     function applyVisibility() {
         if (!cy) return;
 
-        // 1. Apply relation filter — hide edges whose predicate is not active
-        cy.edges().forEach(edge => {
-            const lbl = edge.data('label');
-            if (!activePredicates.has(lbl)) edge.addClass('hidden-rel');
-            else                            edge.removeClass('hidden-rel');
+        cy.batch(() => {
+            // 1. Apply relation filter — hide edges whose predicate is not active
+            cy.edges().forEach(edge => {
+                const lbl = edge.data('label');
+                if (!activePredicates.has(lbl)) edge.addClass('hidden-rel');
+                else                            edge.removeClass('hidden-rel');
+            });
+
+            // 2. Selection neighbourhood highlight
+            cy.elements().removeClass('dimmed highlighted');
+
+            if (selectedNodeId) {
+                const sel = cy.$id(selectedNodeId);
+                if (!sel.length) return;
+
+                // Only consider edges that pass the relation filter
+                const visEdges    = sel.connectedEdges().not('.hidden-rel');
+                const neighbours  = visEdges.connectedNodes().not(sel);
+
+                cy.elements().addClass('dimmed');
+                sel.removeClass('dimmed');                          // selected node: use :selected style
+                neighbours.removeClass('dimmed').addClass('highlighted');
+                visEdges.removeClass('dimmed').addClass('highlighted');
+            }
         });
-
-        // 2. Selection neighbourhood highlight
-        cy.elements().removeClass('dimmed highlighted');
-
-        if (selectedNodeId) {
-            const sel = cy.$id(selectedNodeId);
-            if (!sel.length) return;
-
-            // Only consider edges that pass the relation filter
-            const visEdges    = sel.connectedEdges().not('.hidden-rel');
-            const neighbours  = visEdges.connectedNodes().not(sel);
-
-            cy.elements().addClass('dimmed');
-            sel.removeClass('dimmed');                          // selected node: use :selected style
-            neighbours.removeClass('dimmed').addClass('highlighted');
-            visEdges.removeClass('dimmed').addClass('highlighted');
-        }
     }
 
     /* ── node info panel ─────────────────────────────────────────── */
@@ -591,7 +593,13 @@
         document.querySelectorAll('.lay-btn').forEach(b => b.classList.remove('active'));
         const btn = document.getElementById('lay-' + name);
         if (btn) btn.classList.add('active');
-        cy.layout(LAYOUTS[name]).run();
+
+        // Disable layout animations for large graphs (e.g., > 500 nodes)
+        const opts = Object.assign({}, LAYOUTS[name]);
+        if (cy.nodes().length > 500) {
+            opts.animate = false;
+        }
+        cy.layout(opts).run();
     }
 
     /* ── data load & refresh ─────────────────────────────────────── */
@@ -601,18 +609,58 @@
     }
 
     async function loadData(reLayout) {
-        allData = await fetchGraphData();
+        const fresh = await fetchGraphData();
 
+        // Map current elements
+        const currentNodes = new Set(cy.nodes().map(n => n.id()));
+        const currentEdges = new Set(cy.edges().map(e => e.id()));
+
+        const freshNodeIds = new Set(fresh.nodes.map(n => n.data.id));
+        const freshEdgeIds = new Set(fresh.edges.map(e => e.data.id));
+
+        // Determine what to add and remove
+        const nodesToAdd = fresh.nodes.filter(n => !currentNodes.has(n.data.id));
+        const edgesToAdd = fresh.edges.filter(e => !currentEdges.has(e.data.id));
+
+        const nodesToRemove = cy.nodes().filter(n => !freshNodeIds.has(n.id()));
+        const edgesToRemove = cy.edges().filter(e => !freshEdgeIds.has(e.id()));
+
+        // Also update expired state of existing edges
+        const edgesToUpdate = [];
+        fresh.edges.forEach(e => {
+            if (currentEdges.has(e.data.id)) {
+                const existingEdge = cy.$id(e.data.id);
+                if (existingEdge.data('expired') !== e.data.expired) {
+                    edgesToUpdate.push({ id: e.data.id, expired: e.data.expired });
+                }
+            }
+        });
+
+        allData = fresh;
         const prevSel = selectedNodeId;
-        cy.elements().remove();
-        cy.add(allData);
+
+        cy.batch(() => {
+            nodesToRemove.remove();
+            edgesToRemove.remove();
+
+            if (nodesToAdd.length > 0) cy.add(nodesToAdd);
+            if (edgesToAdd.length > 0) cy.add(edgesToAdd);
+
+            edgesToUpdate.forEach(update => {
+                cy.$id(update.id).data('expired', update.expired);
+            });
+        });
 
         syncPredicates(allData);
         rebuildStyle();
         applyVisibility();
         updateStats(allData);
 
-        if (reLayout) cy.layout(LAYOUTS[currentLayout]).run();
+        if (reLayout) {
+            const opts = Object.assign({}, LAYOUTS[currentLayout]);
+            if (cy.nodes().length > 500) opts.animate = false;
+            cy.layout(opts).run();
+        }
 
         // Restore selection if the node still exists
         if (prevSel && cy.$id(prevSel).length) {
@@ -641,20 +689,63 @@
             badge.classList.remove('pulse');
 
             const fresh = await fetchGraphData();
-            if (fresh.nodes.length !== cy.nodes().length || fresh.edges.length !== cy.edges().length) {
-                const addedNodes = fresh.nodes.length > cy.nodes().length;
+
+            // Map current elements
+            const currentNodes = new Set(cy.nodes().map(n => n.id()));
+            const currentEdges = new Set(cy.edges().map(e => e.id()));
+
+            const freshNodeIds = new Set(fresh.nodes.map(n => n.data.id));
+            const freshEdgeIds = new Set(fresh.edges.map(e => e.data.id));
+
+            // Determine what to add and remove
+            const nodesToAdd = fresh.nodes.filter(n => !currentNodes.has(n.data.id));
+            const edgesToAdd = fresh.edges.filter(e => !currentEdges.has(e.data.id));
+
+            const nodesToRemove = cy.nodes().filter(n => !freshNodeIds.has(n.id()));
+            const edgesToRemove = cy.edges().filter(e => !freshEdgeIds.has(e.id()));
+
+            // Also update expired state of existing edges
+            const edgesToUpdate = [];
+            fresh.edges.forEach(e => {
+                if (currentEdges.has(e.data.id)) {
+                    const existingEdge = cy.$id(e.data.id);
+                    if (existingEdge.data('expired') !== e.data.expired) {
+                        edgesToUpdate.push({ id: e.data.id, expired: e.data.expired });
+                    }
+                }
+            });
+
+            if (nodesToAdd.length > 0 || edgesToAdd.length > 0 || nodesToRemove.length > 0 || edgesToRemove.length > 0 || edgesToUpdate.length > 0) {
                 allData = fresh;
-                const prevSel = selectedNodeId;
-                cy.elements().remove();
-                cy.add(fresh);
+
+                cy.batch(() => {
+                    nodesToRemove.remove();
+                    edgesToRemove.remove();
+
+                    if (nodesToAdd.length > 0) cy.add(nodesToAdd);
+                    if (edgesToAdd.length > 0) cy.add(edgesToAdd);
+
+                    edgesToUpdate.forEach(update => {
+                        cy.$id(update.id).data('expired', update.expired);
+                    });
+                });
+
                 syncPredicates(fresh);
                 rebuildStyle();
                 applyVisibility();
                 updateStats(fresh);
-                if (addedNodes) cy.layout(LAYOUTS[currentLayout]).run();
-                if (prevSel && cy.$id(prevSel).length) {
-                    cy.$id(prevSel).select();
-                    showNodeInfo(prevSel);
+
+                if (nodesToAdd.length > 0) {
+                    const opts = Object.assign({}, LAYOUTS[currentLayout]);
+                    if (cy.nodes().length > 500) opts.animate = false;
+                    cy.layout(opts).run();
+                }
+
+                if (selectedNodeId && cy.$id(selectedNodeId).length) {
+                    cy.$id(selectedNodeId).select();
+                    showNodeInfo(selectedNodeId);
+                } else if (selectedNodeId) {
+                    hideNodeInfo();
                 }
             }
 
@@ -666,11 +757,21 @@
     async function initGraph() {
         allData = await fetchGraphData();
 
+        const opts = Object.assign({}, LAYOUTS.force);
+        if (allData.nodes && allData.nodes.length > 500) {
+            opts.animate = false;
+        }
+
         cy = cytoscape({
             container: document.getElementById('cy'),
             elements: allData,
             style: [],               // will be built by rebuildStyle()
-            layout: LAYOUTS.force,
+            layout: opts,
+            // Performance hints
+            textureOnViewport: true,
+            hideEdgesOnViewport: true,
+            hideLabelsOnViewport: true,
+            pixelRatio: 1,
         });
 
         cy.on('select', 'node',   evt => showNodeInfo(evt.target.id()));
